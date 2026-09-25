@@ -1,0 +1,33 @@
+#compdef docklayout
+
+_docklayout() {
+  local -a commands layouts
+  commands=(
+    'save:Snapshot the current Dock'
+    'load:Switch to a saved layout'
+    'list:List saved layouts'
+    'show:Print a layout or the live Dock'
+    'delete:Delete a saved layout'
+    'undo:Restore the Dock from before the last switch'
+    'refresh:Regenerate Raycast commands'
+    'help:Show usage'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'command' commands
+    return
+  fi
+
+  case ${words[2]} in
+    load|show|delete)
+      layouts=(${(f)"$(command docklayout list 2>/dev/null)"})
+      layouts=(${layouts:#No Dock layouts saved.})
+      _describe 'layout' layouts
+      ;;
+    save)
+      _message 'layout name'
+      ;;
+  esac
+}
+
+_docklayout
