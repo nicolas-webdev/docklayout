@@ -6,10 +6,10 @@ _docklayout() {
     'save:Snapshot the current Dock'
     'load:Switch to a saved layout'
     'list:List saved layouts'
+    'active:Print the layout that matches the Dock right now'
     'show:Print a layout or the live Dock'
     'delete:Delete a saved layout'
     'undo:Restore the Dock from before the last switch'
-    'refresh:Regenerate Raycast commands'
     'help:Show usage'
   )
 

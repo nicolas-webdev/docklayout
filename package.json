@@ -1,0 +1,32 @@
+{
+  "name": "docklayout",
+  "version": "0.2.0",
+  "description": "Save and switch macOS Dock layouts from a menu bar icon or the terminal",
+  "bin": {
+    "docklayout": "npm/cli.js"
+  },
+  "files": [
+    "npm/cli.js",
+    "bin/docklayout",
+    "app/DockLayout.app",
+    "completions/zsh/_docklayout",
+    "LICENSE",
+    "README.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nicolas-webdev/docklayout.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "macos",
+    "dock",
+    "menubar"
+  ]
+}
