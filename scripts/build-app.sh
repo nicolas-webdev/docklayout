@@ -20,23 +20,28 @@ WORK="$ROOT/.build/app"
 rm -rf "$APP" "$WORK"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources/completions" "$WORK"
 
-# Build each architecture on its own and merge with lipo. An architecture that
-# can't be linked here (x86_64 with only the Command Line Tools, for one) is
-# skipped with a warning rather than failing the build.
+# Build each architecture on its own, copy its binaries aside (newer SwiftPM
+# writes every architecture to the same folder), then merge with lipo. An
+# architecture that can't be linked here is skipped with a warning.
 built=()
 for arch in $ARCHS; do
   if swift build -c release --arch "$arch" --product DockLayoutApp \
      && swift build -c release --arch "$arch" --product docklayout; then
-    built+=("$(swift build -c release --arch "$arch" --show-bin-path)")
+    bin="$(swift build -c release --arch "$arch" --show-bin-path)"
+    mkdir -p "$WORK/$arch"
+    cp "$bin/DockLayoutApp" "$bin/docklayout" "$WORK/$arch/"
+    [[ "$(lipo -archs "$WORK/$arch/DockLayoutApp")" == "$arch" ]] \
+      || { echo "error: $arch build produced $(lipo -archs "$WORK/$arch/DockLayoutApp")" >&2; exit 1; }
+    built+=("$WORK/$arch")
   else
     echo "warning: skipping $arch, it did not build" >&2
   fi
 done
 (( ${#built} > 0 )) || { echo "error: nothing built" >&2; exit 1; }
-echo "Architectures: ${(j: :)ARCHS} → built ${#built}"
 
 lipo -create ${^built}/DockLayoutApp -output "$APP/Contents/MacOS/DockLayout"
 lipo -create ${^built}/docklayout -output "$APP/Contents/Helpers/docklayout"
+echo "Architectures: $(lipo -archs "$APP/Contents/MacOS/DockLayout")"
 
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"

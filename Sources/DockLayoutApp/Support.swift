@@ -141,7 +141,7 @@ enum Migration {
             let legacySupport = home.appendingPathComponent("Library/Application Support/docklayout")
             if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: CommandLineTool.link.path),
                target.hasPrefix(legacySupport.path) {
-                try? CommandLineTool.install()
+                _ = try? CommandLineTool.install()
             }
             try? FileManager.default.removeItem(at: legacySupport)
         }

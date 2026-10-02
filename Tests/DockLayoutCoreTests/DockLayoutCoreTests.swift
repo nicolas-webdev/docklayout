@@ -1,6 +1,6 @@
 @testable import DockLayoutCore
 import Foundation
-import XCTest
+import Testing
 
 /// Stands in for the real Dock: holds a layout in memory and counts applies.
 final class FakeDock: DockBackend {
@@ -37,65 +37,64 @@ final class FakeDock: DockBackend {
     }
 }
 
-final class DockLayoutCoreTests: XCTestCase {
-    private var directory: URL!
-    private var dock: FakeDock!
-    private var layouts: DockLayouts!
+/// Each test gets a fresh instance, so a fresh temporary folder and Dock.
+final class DockLayoutCoreTests {
+    private let directory: URL
+    private let dock: FakeDock
+    private let layouts: DockLayouts
 
-    override func setUpWithError() throws {
+    init() {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("docklayout-tests-\(UUID().uuidString)", isDirectory: true)
         dock = FakeDock(apps: ["Safari", "spacer", "Mail"], others: ["Downloads"])
         layouts = DockLayouts(store: LayoutStore(baseDirectory: directory), dock: dock)
     }
 
-    override func tearDownWithError() throws {
+    deinit {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    func testNameValidation() {
+    @Test func testNameValidation() {
         for good in ["Work", "a", "home-2", "x.y_z", String(repeating: "a", count: 64)] {
-            XCTAssertTrue(LayoutStore.isValidName(good), good)
+            #expect(LayoutStore.isValidName(good), "\(good)")
         }
         for bad in ["", "-work", ".hidden", "has space", "a/b", "émoji", String(repeating: "a", count: 65)] {
-            XCTAssertFalse(LayoutStore.isValidName(bad), bad)
+            #expect(!LayoutStore.isValidName(bad), "\(bad)")
         }
     }
 
-    func testDirectoryOverride() {
+    @Test func testDirectoryOverride() {
         let store = LayoutStore(environment: ["DOCKLAYOUT_DIR": "/tmp/somewhere"])
-        XCTAssertEqual(store.layoutsDirectory.path, "/tmp/somewhere/layouts")
+        #expect(store.layoutsDirectory.path == "/tmp/somewhere/layouts")
     }
 
-    func testSaveStoresOnlyLayoutKeysAndListsSorted() throws {
+    @Test func testSaveStoresOnlyLayoutKeysAndListsSorted() throws {
         try layouts.save("work")
         try layouts.save("Alpha")
-        XCTAssertEqual(layouts.names(), ["Alpha", "work"])
+        #expect(layouts.names() == ["Alpha", "work"])
 
         let saved = try layouts.store.read("work")
-        XCTAssertEqual(Set(saved.keys), Set(layoutKeys))
-        XCTAssertTrue(layoutsEqual(saved, dock.layout))
+        #expect(Set(saved.keys) == Set(layoutKeys))
+        #expect(layoutsEqual(saved, dock.layout))
     }
 
-    func testSaveRejectsCaseInsensitiveClash() throws {
+    @Test func testSaveRejectsCaseInsensitiveClash() throws {
         try layouts.save("Work")
-        XCTAssertThrowsError(try layouts.save("work")) {
-            XCTAssertEqual($0 as? DockLayoutError, .nameTaken(existing: "Work"))
-        }
-        XCTAssertNoThrow(try layouts.save("Work"), "Overwriting the same name is allowed")
+        #expect(throws: DockLayoutError.nameTaken(existing: "Work")) { try self.layouts.save("work") }
+        try layouts.save("Work") // overwriting the same name is allowed
     }
 
-    func testActiveNameTracksTheDock() throws {
-        XCTAssertNil(layouts.activeName())
+    @Test func testActiveNameTracksTheDock() throws {
+        #expect(layouts.activeName() == nil)
         try layouts.save("Work")
-        XCTAssertEqual(layouts.activeName(), "Work")
+        #expect(layouts.activeName() == "Work")
         dock.set(apps: ["Safari"])
-        XCTAssertNil(layouts.activeName())
+        #expect(layouts.activeName() == nil)
         try layouts.save("Minimal")
-        XCTAssertEqual(layouts.activeName(), "Minimal")
+        #expect(layouts.activeName() == "Minimal")
     }
 
-    func testBookmarkDataDifferenceBreaksMatch() throws {
+    @Test func testBookmarkDataDifferenceBreaksMatch() throws {
         try layouts.save("Work")
         var changed = dock.layout
         var apps = changed["persistent-apps"] as! [[String: Any]]
@@ -104,74 +103,70 @@ final class DockLayoutCoreTests: XCTestCase {
         apps[0]["tile-data"] = tile
         changed["persistent-apps"] = apps
         dock.layout = changed
-        XCTAssertNil(layouts.activeName())
+        #expect(layouts.activeName() == nil)
     }
 
-    func testLoadBacksUpThenApplies() throws {
+    @Test func testLoadBacksUpThenApplies() throws {
         try layouts.save("Work")
         dock.set(apps: ["Xcode"])
         try layouts.load("Work")
 
-        XCTAssertEqual(dock.applied, 1)
-        XCTAssertEqual(layouts.activeName(), "Work")
-        XCTAssertEqual(layouts.store.backups().count, 1)
+        #expect(dock.applied == 1)
+        #expect(layouts.activeName() == "Work")
+        #expect(layouts.store.backups().count == 1)
         let backup = try layouts.store.readBackup(layouts.store.backups()[0])
-        XCTAssertTrue(layoutsEqual(backup, FakeDock.layout(apps: ["Xcode"])))
+        #expect(layoutsEqual(backup, FakeDock.layout(apps: ["Xcode"])))
     }
 
-    func testLoadMissingLayout() {
-        XCTAssertThrowsError(try layouts.load("Nope")) {
-            XCTAssertEqual($0 as? DockLayoutError, .notFound("Nope"))
-        }
-        XCTAssertEqual(dock.applied, 0)
-        XCTAssertTrue(layouts.store.backups().isEmpty)
+    @Test func testLoadMissingLayout() {
+        #expect(throws: DockLayoutError.notFound("Nope")) { try self.layouts.load("Nope") }
+        #expect(dock.applied == 0)
+        #expect(layouts.store.backups().isEmpty)
     }
 
-    func testUndoTogglesBetweenTheLastTwoDocks() throws {
-        XCTAssertThrowsError(try layouts.undo()) {
-            XCTAssertEqual($0 as? DockLayoutError, .nothingToUndo)
-        }
+    @Test func testUndoTogglesBetweenTheLastTwoDocks() throws {
+        #expect(throws: DockLayoutError.nothingToUndo) { try self.layouts.undo() }
         try layouts.save("Work")
         dock.set(apps: ["Xcode"])
         try layouts.load("Work")
 
         try layouts.undo()
-        XCTAssertTrue(layoutsEqual(dock.layout, FakeDock.layout(apps: ["Xcode"])))
+        #expect(layoutsEqual(dock.layout, FakeDock.layout(apps: ["Xcode"])))
         try layouts.undo()
-        XCTAssertEqual(layouts.activeName(), "Work")
+        #expect(layouts.activeName() == "Work")
     }
 
-    func testBackupsWithinOneSecondSortInOrder() throws {
+    @Test func testBackupsWithinOneSecondSortInOrder() throws {
         let now = Date()
         let first = try layouts.store.backup(FakeDock.layout(apps: ["One"]), at: now)
         let second = try layouts.store.backup(FakeDock.layout(apps: ["Two"]), at: now)
-        XCTAssertEqual(layouts.store.backups(), [first, second])
+        #expect(layouts.store.backups() == [first, second])
     }
 
-    func testBackupsArePrunedToTen() throws {
+    @Test func testBackupsArePrunedToTen() throws {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
         for index in 0..<13 {
             try layouts.store.backup(FakeDock.layout(apps: ["\(index)"]), at: start.addingTimeInterval(Double(index)))
         }
         let backups = layouts.store.backups()
-        XCTAssertEqual(backups.count, LayoutStore.backupsKept)
+        #expect(backups.count == LayoutStore.backupsKept)
         let newest = try layouts.store.readBackup(backups.last!)
-        XCTAssertTrue(layoutsEqual(newest, FakeDock.layout(apps: ["12"])))
+        #expect(layoutsEqual(newest, FakeDock.layout(apps: ["12"])))
     }
 
-    func testDelete() throws {
+    @Test func testDelete() throws {
         try layouts.save("Work")
         try layouts.delete("Work")
-        XCTAssertEqual(layouts.names(), [])
-        XCTAssertThrowsError(try layouts.delete("Work"))
+        #expect(layouts.names() == [])
+        #expect(throws: DockLayoutError.notFound("Work")) { try self.layouts.delete("Work") }
     }
 
     /// Layouts written by the 0.2 Python tool (binary plist, two keys) still load.
-    func testReadsLegacyBinaryPlist() throws {
+    @Test func testReadsLegacyBinaryPlist() throws {
         let legacy = FakeDock.layout(apps: ["Finder", "spacer"])
         let data = try PropertyListSerialization.data(fromPropertyList: legacy, format: .binary, options: 0)
         try FileManager.default.createDirectory(at: layouts.store.layoutsDirectory, withIntermediateDirectories: true)
         try data.write(to: layouts.store.url(for: "Old"))
-        XCTAssertTrue(layoutsEqual(try layouts.store.read("Old"), legacy))
+        #expect(try layoutsEqual(layouts.store.read("Old"), legacy))
     }
 }

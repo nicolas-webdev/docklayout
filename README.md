@@ -101,7 +101,7 @@ Then add `~/raycast-scripts` once in Raycast Settings → Extensions → Script 
 
 ## Build from source
 
-You need Xcode 15 or newer (or its Command Line Tools).
+You need Swift 6: Xcode 16 or newer, or just its Command Line Tools.
 
 ```bash
 swift test                # core tests
