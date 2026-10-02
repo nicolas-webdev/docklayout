@@ -10,6 +10,7 @@ _docklayout() {
     'show:Print a layout or the live Dock'
     'delete:Delete a saved layout'
     'undo:Restore the Dock from before the last switch'
+    'restart-dock:Start the Dock again if it is not showing'
     'help:Show usage'
   )
 

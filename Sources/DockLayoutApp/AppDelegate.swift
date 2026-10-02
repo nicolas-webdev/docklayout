@@ -30,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
+        if !SystemDock.isRunning {
+            menu.addItem(menuItem("The Dock isn't running. Restart It", #selector(restartDock)))
+            menu.addItem(.separator())
+        }
         let names = layouts.names()
         let active = layouts.activeName()
 
@@ -98,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         attempt("Couldn't save \(name)") { try layouts.save(name) }
+    }
+
+    @objc private func restartDock() {
+        attempt("Couldn't restart the Dock") { try SystemDock.restart() }
     }
 
     @objc private func undoSwitch() {

@@ -16,6 +16,7 @@ public enum DockLayoutError: LocalizedError, Equatable {
     case unreadable(String)
     case notAList(key: String)
     case dockWriteFailed
+    case dockNotRunning
 
     public var errorDescription: String? {
         switch self {
@@ -35,6 +36,9 @@ public enum DockLayoutError: LocalizedError, Equatable {
             return "Dock preference \(key) is not a list"
         case .dockWriteFailed:
             return "Couldn't write the Dock preferences."
+        case .dockNotRunning:
+            return "The Dock didn't come back after restarting. Your layout was saved to its settings.\n"
+                + "Bring it back with: launchctl kickstart -k gui/$(id -u)/com.apple.Dock.agent"
         }
     }
 }

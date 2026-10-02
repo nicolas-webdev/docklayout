@@ -13,6 +13,7 @@ Usage:
   docklayout show [name]     Print a layout, or the live Dock
   docklayout delete <name>   Delete a saved layout
   docklayout undo            Restore the Dock from before the last switch
+  docklayout restart-dock    Start the Dock again if it isn't showing
 
 Layouts are stored in ~/.config/docklayout/layouts.
 
@@ -248,6 +249,9 @@ func run(_ args: [String]) throws -> Int32 {
     case ("undo", 1):
         let restored = try layouts.undo()
         print("Restored Dock from \(restored)")
+    case ("restart-dock", 1):
+        try SystemDock.restart()
+        print("The Dock is running.")
     case ("raycast", 1):
         print(try refreshRaycast(layouts.names()).path)
     default:

@@ -37,18 +37,63 @@ public struct SystemDock: DockBackend {
             CFPreferencesSetAppValue(key as CFString, NSArray(array: items), Self.domain)
         }
         guard CFPreferencesAppSynchronize(Self.domain) else { throw DockLayoutError.dockWriteFailed }
-        Self.restartDock()
+        try Self.restart()
     }
 
-    private static func restartDock() {
-        // launchd relaunches the Dock straight away and it rereads its preferences.
-        let killall = Process()
-        killall.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        killall.arguments = ["Dock"]
-        killall.standardOutput = FileHandle.nullDevice
-        killall.standardError = FileHandle.nullDevice
-        try? killall.run()
-        killall.waitUntilExit()
+    private static var agent: String { "gui/\(getuid())/com.apple.Dock.agent" }
+
+    /// Whether a Dock process is running for this user.
+    public static var isRunning: Bool {
+        run("/usr/bin/pgrep", ["-x", "-u", String(getuid()), "Dock"]) == 0
+    }
+
+    /// Restarts the Dock and waits until it's back.
+    ///
+    /// Don't just `killall Dock` and trust launchd to bring it back: after a few
+    /// quick restarts it can leave the Dock down. `kickstart -k` has launchd stop
+    /// and start it in one step, and we check that it came back. Because this
+    /// waits, back-to-back switches can't pile kills onto a Dock still starting.
+    public static func restart() throws {
+        if run("/bin/launchctl", ["kickstart", "-k", agent]) != 0 {
+            run("/usr/bin/killall", ["Dock"])
+            // Let the old Dock exit, so the check below doesn't see it still running.
+            Thread.sleep(forTimeInterval: 1)
+        }
+        if waitUntilRunning(seconds: 5) {
+            return
+        }
+        // Still down: ask launchd to start it, without killing anything.
+        run("/bin/launchctl", ["kickstart", agent])
+        guard waitUntilRunning(seconds: 5) else { throw DockLayoutError.dockNotRunning }
+    }
+
+    private static func waitUntilRunning(seconds: Double) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        repeat {
+            if isRunning {
+                // Give the new Dock a moment to finish starting before anything else touches it.
+                Thread.sleep(forTimeInterval: 0.5)
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        } while Date() < deadline
+        return false
+    }
+
+    @discardableResult
+    private static func run(_ tool: String, _ arguments: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return -1
+        }
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 }
 #endif
