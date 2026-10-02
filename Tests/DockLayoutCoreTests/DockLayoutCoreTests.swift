@@ -140,7 +140,8 @@ final class DockLayoutCoreTests {
         let now = Date()
         let first = try layouts.store.backup(FakeDock.layout(apps: ["One"]), at: now)
         let second = try layouts.store.backup(FakeDock.layout(apps: ["Two"]), at: now)
-        #expect(layouts.store.backups() == [first, second])
+        // Compare names: on macOS the temp folder is reached through the /var → /private/var symlink.
+        #expect(layouts.store.backups().map(\.lastPathComponent) == [first.lastPathComponent, second.lastPathComponent])
     }
 
     @Test func testBackupsArePrunedToTen() throws {
