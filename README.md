@@ -2,31 +2,36 @@
 
 Save a macOS Dock and switch back to it from a menu bar icon, or from the terminal.
 
-macOS still has no Dock profiles. docklayout snapshots the apps, folders, stacks, and spacers currently on your Dock, then puts that exact row back when you ask. Icon size, autohide, magnification, and hot corners are left alone.
+macOS still has no Dock profiles. Dock Layout snapshots the apps, folders, stacks, and spacers currently on your Dock, then puts that exact row back when you ask. Icon size, autohide, magnification, and hot corners are left alone.
 
 ## Install
 
-One command:
+1. Download `DockLayout-<version>.dmg` from [Releases](https://github.com/nicolas-webdev/docklayout/releases).
+2. Drag **Dock Layout** into Applications and open it.
 
-```bash
-npx github:nicolas-webdev/docklayout
-```
+A dock icon appears in the menu bar. Click it to switch layouts, or to save the Dock you have arranged right now. It starts again when you log in.
 
-A dock icon appears in the menu bar. Click it to switch layouts, or to save the Dock you have arranged right now. The icon comes back the next time you log in.
+You need macOS 13 or newer, on Apple silicon or Intel. Nothing else: no Python, no Node.
 
-You need macOS 12 or newer and Node 18 or newer. The menu bar app is built for Apple silicon. Python 3.9 ships with macOS and is what the terminal command uses.
+The app isn't notarized yet, so the first launch is blocked. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Dock Layout. You only do this once.
+
+Coming from the `npx` install? Open the new app once. It quits the old one, removes its login agent and Python script, and takes over Start at Login and the `docklayout` command.
 
 ## Menu bar
 
 - Each saved layout is a menu item. Choose one and the Dock switches. The Dock disappears for a fraction of a second while it restarts.
 - A check mark sits on the layout that matches the Dock right now.
 - **Save Current Dock…** asks for a name and snapshots whatever is on screen, including folders and spacers.
-- **Start at Login** is on after install. Turn it off if you only want the icon for this session.
-- **Quit Dock Layout** removes the icon until the next login, or until you run the install command again.
+- **Undo Last Switch** puts back the Dock you had before the last switch.
+- **Delete Layout** removes a saved layout.
+- **Open Layouts Folder** shows the saved files in Finder.
+- **Install Command Line Tool…** links `docklayout` into `~/.local/bin` (see below).
+- **Start at Login** is on after install. It also appears in System Settings → General → Login Items.
+- **Quit Dock Layout** removes the icon until the next login.
 
 ## Terminal
 
-The same install puts `docklayout` on your PATH (`~/.local/bin`).
+The terminal command ships inside the app. Choose **Install Command Line Tool…** in the menu to link it to `~/.local/bin/docklayout`. The link follows the app, so updating the app updates the command too.
 
 ```bash
 docklayout save Work
@@ -49,6 +54,13 @@ Names are letters, numbers, `.`, `_`, and `-`, up to 64 characters.
 
 Every switch keeps a backup of the Dock you had a moment earlier. `docklayout undo` puts that back. The ten most recent backups stay in `~/.config/docklayout/backups`.
 
+Tab completion for zsh is in the app bundle. Add this to `~/.zshrc`:
+
+```zsh
+fpath=("/Applications/Dock Layout.app/Contents/Resources/completions" $fpath)
+autoload -Uz compinit && compinit
+```
+
 ## What is saved
 
 Two arrays from the Dock preferences, and nothing else:
@@ -64,22 +76,18 @@ Saved layouts live in `~/.config/docklayout/layouts/<name>.plist` on your Mac. T
 export DOCKLAYOUT_DIR="$HOME/.config/docklayout"
 ```
 
+
+Layouts saved by the earlier Python version load as they are.
+
 ## Remove it
 
-```bash
-npx github:nicolas-webdev/docklayout uninstall
-```
-
-Saved layouts stay in `~/.config/docklayout/layouts`. Delete that folder if you want them gone too.
-
-## Homebrew
-
-The formula installs the terminal command only. The menu bar app is the `npx` command above.
+Quit Dock Layout and move it to the Trash. Or, to also remove the terminal link and anything left from the `npx` install:
 
 ```bash
-brew tap nicolas-webdev/docklayout https://github.com/nicolas-webdev/docklayout
-brew install docklayout
+curl -fsSL https://raw.githubusercontent.com/nicolas-webdev/docklayout/main/uninstall.sh | zsh
 ```
+
+Saved layouts stay in `~/.config/docklayout/layouts`. Delete that folder if you want them gone too, or pass `--purge`.
 
 ## Raycast
 
@@ -90,6 +98,26 @@ docklayout raycast
 ```
 
 Then add `~/raycast-scripts` once in Raycast Settings → Extensions → Script Commands.
+
+## Build from source
+
+You need Xcode 15 or newer (or its Command Line Tools).
+
+```bash
+swift test                # core tests
+scripts/build-app.sh      # → dist/Dock Layout.app
+scripts/make-dmg.sh       # → dist/DockLayout-<version>.dmg
+```
+
+`build-app.sh` builds for Apple silicon and Intel and merges them. Set `ARCHS=arm64` to build one. If an architecture can't be linked on your machine it is skipped with a warning. Builds are ad-hoc signed unless you set `SIGN_IDENTITY` to a Developer ID. `make-dmg.sh` notarizes when `NOTARY_PROFILE` is set.
+
+The version lives in `Sources/DockLayoutCore/Version.swift`. Pushing a `v*` tag builds the DMG on GitHub Actions and attaches it to a release.
+
+| Path | What it is |
+| --- | --- |
+| `Sources/DockLayoutCore` | Reads and writes the Dock preferences and the layout files |
+| `Sources/DockLayoutApp` | The menu bar app |
+| `Sources/docklayout` | The terminal command |
 
 ## License
 

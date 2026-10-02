@@ -1,16 +1,25 @@
 #!/bin/zsh
 set -euo pipefail
 
-# Removes the menu bar app, the terminal command, and login startup.
+# Removes Dock Layout, its terminal command, and login startup.
 # Saved layouts in ~/.config/docklayout/layouts are left in place.
 # Pass --purge to delete those too, along with switch backups.
 
-UID_NUM="$(id -u)"
-launchctl bootout "gui/${UID_NUM}/com.nicolaswebdev.docklayout" 2>/dev/null || true
+APP="/Applications/Dock Layout.app"
+pkill -x DockLayout 2>/dev/null || true
+pkill -x docklayout-bar 2>/dev/null || true
+rm -rf "$APP"
+
+link="${HOME}/.local/bin/docklayout"
+if [[ -L "$link" ]]; then
+  rm -f "$link"
+fi
+
+# Left behind by the npx install (0.2 and earlier).
+launchctl bootout "gui/$(id -u)/com.nicolaswebdev.docklayout" 2>/dev/null || true
 rm -f "${HOME}/Library/LaunchAgents/com.nicolaswebdev.docklayout.plist"
 rm -rf "${HOME}/Library/Application Support/docklayout"
-rm -f "${HOME}/.local/bin/docklayout"
-rm -f "${HOME}/.config/docklayout/zsh/_docklayout"
+rm -rf "${HOME}/.config/docklayout/zsh"
 
 if [[ "${1:-}" == "--purge" ]]; then
   rm -rf "${HOME}/.config/docklayout/layouts" "${HOME}/.config/docklayout/backups"
