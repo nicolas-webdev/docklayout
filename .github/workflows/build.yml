@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Test
-        run: swift test
+        run: swift run DockLayoutChecks
 
       - name: Build app
         run: scripts/build-app.sh

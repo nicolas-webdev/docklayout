@@ -12,6 +12,7 @@ let package = Package(
         .target(name: "DockLayoutCore"),
         .executableTarget(name: "docklayout", dependencies: ["DockLayoutCore"]),
         .executableTarget(name: "DockLayoutApp", dependencies: ["DockLayoutCore"]),
-        .testTarget(name: "DockLayoutCoreTests", dependencies: ["DockLayoutCore"]),
+        // Run with `swift run DockLayoutChecks`; see the file for why it isn't a test target.
+        .executableTarget(name: "DockLayoutChecks", dependencies: ["DockLayoutCore"], path: "Tests/DockLayoutChecks"),
     ]
 )

@@ -104,9 +104,9 @@ Then add `~/raycast-scripts` once in Raycast Settings → Extensions → Script 
 You need Swift 6: Xcode 16 or newer, or just its Command Line Tools.
 
 ```bash
-swift test                # core tests
-scripts/build-app.sh      # → dist/Dock Layout.app
-scripts/make-dmg.sh       # → dist/DockLayout-<version>.dmg
+swift run DockLayoutChecks   # core checks
+scripts/build-app.sh         # → dist/Dock Layout.app
+scripts/make-dmg.sh          # → dist/DockLayout-<version>.dmg
 ```
 
 `build-app.sh` builds for Apple silicon and Intel and merges them. Set `ARCHS=arm64` to build one. If an architecture can't be linked on your machine it is skipped with a warning. Builds are ad-hoc signed unless you set `SIGN_IDENTITY` to a Developer ID. `make-dmg.sh` notarizes when `NOTARY_PROFILE` is set.
