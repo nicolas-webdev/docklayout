@@ -6,16 +6,26 @@ macOS still has no Dock profiles. Dock Layout snapshots the apps, folders, stack
 
 ## Install
 
+You need macOS 13 or newer, on Apple silicon or Intel. Pick either way; both install the same app.
+
+**From the terminal** (needs Node 18 or newer):
+
+```bash
+npx github:nicolas-webdev/docklayout
+```
+
+This downloads the latest release into Applications, opens it, and puts `docklayout` on your PATH (`~/.local/bin`). Run it again to update.
+
+**Or download it:**
+
 1. Download `DockLayout-<version>.dmg` from [Releases](https://github.com/nicolas-webdev/docklayout/releases).
 2. Drag **Dock Layout** into Applications and open it.
 
+The app isn't notarized yet, so a downloaded copy is blocked the first time. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Dock Layout. You only do this once. The `npx` install skips this step.
+
 A dock icon appears in the menu bar. Click it to switch layouts, or to save the Dock you have arranged right now. It starts again when you log in.
 
-You need macOS 13 or newer, on Apple silicon or Intel. Nothing else: no Python, no Node.
-
-The app isn't notarized yet, so the first launch is blocked. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Dock Layout. You only do this once.
-
-Coming from the `npx` install? Open the new app once. It quits the old one, removes its login agent and Python script, and takes over Start at Login and the `docklayout` command.
+Coming from an older `npx` install? Install either way and open the app once. It quits the old version, removes its login agent and Python script, and takes over Start at Login and the `docklayout` command.
 
 ## Menu bar
 
@@ -33,7 +43,7 @@ Coming from the `npx` install? Open the new app once. It quits the old one, remo
 
 ## Terminal
 
-The terminal command ships inside the app. Choose **Install Command Line Tool…** in the menu to link it to `~/.local/bin/docklayout`. The link follows the app, so updating the app updates the command too.
+The terminal command ships inside the app. The `npx` install links it for you; otherwise choose **Install Command Line Tool…** in the menu to link it to `~/.local/bin/docklayout`. The link follows the app, so updating the app updates the command too.
 
 ```bash
 docklayout save Work
@@ -84,13 +94,13 @@ Layouts saved by the earlier Python version load as they are.
 
 ## Remove it
 
-Quit Dock Layout and move it to the Trash. Or, to also remove the terminal link and anything left from the `npx` install:
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nicolas-webdev/docklayout/main/uninstall.sh | zsh
+npx github:nicolas-webdev/docklayout uninstall
 ```
 
-Saved layouts stay in `~/.config/docklayout/layouts`. Delete that folder if you want them gone too, or pass `--purge`.
+Or quit Dock Layout and move it to the Trash.
+
+Saved layouts stay in `~/.config/docklayout/layouts`. Delete that folder if you want them gone too.
 
 ## Raycast
 
