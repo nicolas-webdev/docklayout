@@ -4,7 +4,10 @@ import Foundation
 /// Dock's preferences; tests use an in-memory stand-in.
 public protocol DockBackend {
     func readLayout() throws -> Layout
+    /// Writes the layout and restarts the Dock so it shows it.
     func apply(_ layout: Layout) throws
+    /// Restarts the Dock without changing it.
+    func restart() throws
 }
 
 #if os(macOS)
@@ -37,6 +40,10 @@ public struct SystemDock: DockBackend {
             CFPreferencesSetAppValue(key as CFString, NSArray(array: items), Self.domain)
         }
         guard CFPreferencesAppSynchronize(Self.domain) else { throw DockLayoutError.dockWriteFailed }
+        try Self.restart()
+    }
+
+    public func restart() throws {
         try Self.restart()
     }
 
@@ -128,28 +135,56 @@ public struct DockLayouts {
     }
 
     public func save(_ name: String) throws {
-        try store.write(try liveLayout(), as: name)
+        try withDockLock {
+            try store.write(try liveLayout(), as: name)
+        }
     }
 
     /// Backs up the current Dock, then switches to `name`.
     public func load(_ name: String) throws {
-        let layout = try store.read(name)
-        try store.backup(try liveLayout())
-        try dock.apply(layout)
+        try withDockLock {
+            let layout = try store.read(name)
+            try store.backup(try liveLayout())
+            try dock.apply(layout)
+        }
     }
 
     /// Restores the newest backup. Returns its timestamp name.
     /// The Dock being replaced is backed up first, so undo twice toggles back.
     @discardableResult
     public func undo() throws -> String {
-        guard let previous = store.backups().last else { throw DockLayoutError.nothingToUndo }
-        let layout = try store.readBackup(previous)
-        try store.backup(try liveLayout())
-        try dock.apply(layout)
-        return previous.deletingPathExtension().lastPathComponent
+        try withDockLock {
+            guard let previous = store.backups().last else { throw DockLayoutError.nothingToUndo }
+            let layout = try store.readBackup(previous)
+            try store.backup(try liveLayout())
+            try dock.apply(layout)
+            return previous.deletingPathExtension().lastPathComponent
+        }
+    }
+
+    public func restartDock() throws {
+        try withDockLock {
+            try dock.restart()
+        }
     }
 
     public func delete(_ name: String) throws {
         try store.delete(name)
+    }
+
+    /// Runs `body` while holding a lock shared by every docklayout process, so
+    /// the menu bar app and the terminal command never restart the Dock at the
+    /// same time. A second caller waits for the first to finish.
+    private func withDockLock<T>(_ body: () throws -> T) throws -> T {
+        try FileManager.default.createDirectory(at: store.baseDirectory, withIntermediateDirectories: true)
+        let path = store.baseDirectory.appendingPathComponent(".dock.lock").path
+        let descriptor = open(path, O_CREAT | O_RDWR, 0o644)
+        guard descriptor >= 0 else { throw DockLayoutError.lockFailed(path) }
+        defer { close(descriptor) }
+        while flock(descriptor, LOCK_EX) != 0 {
+            guard errno == EINTR else { throw DockLayoutError.lockFailed(path) }
+        }
+        defer { flock(descriptor, LOCK_UN) }
+        return try body()
     }
 }

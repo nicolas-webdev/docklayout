@@ -83,6 +83,16 @@ enum CommandLineTool {
         (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == bundled.path
     }
 
+    /// If the link points into another copy of Dock Layout (say the build in
+    /// dist/ before the app moved to /Applications), point it at this one.
+    static func followThisCopy() {
+        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: link.path),
+              target != bundled.path,
+              target.hasSuffix(".app/Contents/Helpers/docklayout")
+        else { return }
+        _ = try? install()
+    }
+
     @discardableResult
     static func install() throws -> URL {
         let manager = FileManager.default
@@ -145,6 +155,8 @@ enum Migration {
             }
             try? FileManager.default.removeItem(at: legacySupport)
         }
+
+        CommandLineTool.followThisCopy()
 
         // Start at Login was on by default before; keep that for upgrades and fresh installs.
         if firstLaunch || hadLegacyAgent, !LoginItem.isEnabled {

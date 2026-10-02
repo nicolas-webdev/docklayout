@@ -10,6 +10,12 @@ import Foundation
 final class FakeDock: DockBackend {
     var layout: Layout
     var applied = 0
+    var restarts = 0
+    /// When set, apply takes this long, to expose overlapping switches.
+    var applyDelay: TimeInterval = 0
+    private(set) var mostAtOnce = 0
+    private var inside = 0
+    private let counter = NSLock()
 
     init(apps: [String], others: [String] = []) {
         layout = FakeDock.layout(apps: apps, others: others)
@@ -32,8 +38,20 @@ final class FakeDock: DockBackend {
     }
 
     func apply(_ layout: Layout) throws {
+        counter.lock()
+        inside += 1
+        mostAtOnce = max(mostAtOnce, inside)
+        counter.unlock()
+        Thread.sleep(forTimeInterval: applyDelay)
+        counter.lock()
         self.layout = layout
         applied += 1
+        inside -= 1
+        counter.unlock()
+    }
+
+    func restart() throws {
+        restarts += 1
     }
 
     func set(apps: [String], others: [String] = []) {
@@ -44,9 +62,11 @@ final class FakeDock: DockBackend {
 /// A fresh temporary folder and Dock for each check.
 struct Fixture {
     let dock = FakeDock(apps: ["Safari", "spacer", "Mail"], others: ["Downloads"])
+    let directory: URL
     let layouts: DockLayouts
 
     init(directory: URL) {
+        self.directory = directory
         layouts = DockLayouts(store: LayoutStore(baseDirectory: directory), dock: dock)
     }
 }
@@ -186,6 +206,46 @@ check("reads layouts written by the 0.2 Python tool") { f in
     try FileManager.default.createDirectory(at: f.layouts.store.layoutsDirectory, withIntermediateDirectories: true)
     try data.write(to: f.layouts.store.url(for: "Old"))
     expect(layoutsEqual(try f.layouts.store.read("Old"), legacy))
+}
+
+check("name clashes are found ignoring case") { f in
+    try f.layouts.save("Work")
+    expect(f.layouts.store.existingName(matching: "work") == "Work")
+    expect(f.layouts.store.existingName(matching: "WORK") == "Work")
+    expect(f.layouts.store.existingName(matching: "Home") == nil)
+}
+
+check("restart-dock goes through the backend") { f in
+    try f.layouts.restartDock()
+    expect(f.dock.restarts == 1)
+}
+
+// Two DockLayouts on one folder stand in for the app and the terminal command:
+// each takes the lock through its own file descriptor, as separate processes do.
+check("switches from two callers never overlap") { f in
+    try f.layouts.save("Work")
+    f.dock.applyDelay = 0.2
+    let other = DockLayouts(store: LayoutStore(baseDirectory: f.directory), dock: f.dock)
+    let group = DispatchGroup()
+    final class Errors: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var all: [Error] = []
+        func add(_ error: Error) { lock.lock(); all.append(error); lock.unlock() }
+    }
+    let errors = Errors()
+    for caller in [f.layouts, other, f.layouts, other] {
+        DispatchQueue.global().async(group: group) {
+            do {
+                try caller.load("Work")
+            } catch {
+                errors.add(error)
+            }
+        }
+    }
+    group.wait()
+    expect(errors.all.isEmpty, "\(errors.all)")
+    expect(f.dock.applied == 4)
+    expect(f.dock.mostAtOnce == 1, "\(f.dock.mostAtOnce) switches ran at once")
 }
 
 // MARK: Run

@@ -17,6 +17,7 @@ public enum DockLayoutError: LocalizedError, Equatable {
     case notAList(key: String)
     case dockWriteFailed
     case dockNotRunning
+    case lockFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -36,6 +37,8 @@ public enum DockLayoutError: LocalizedError, Equatable {
             return "Dock preference \(key) is not a list"
         case .dockWriteFailed:
             return "Couldn't write the Dock preferences."
+        case .lockFailed(let path):
+            return "Couldn't lock \(path) to switch the Dock safely."
         case .dockNotRunning:
             return "The Dock didn't come back after restarting. Your layout was saved to its settings.\n"
                 + "Bring it back with: launchctl kickstart -k gui/$(id -u)/com.apple.Dock.agent"
@@ -98,6 +101,12 @@ public struct LayoutStore {
         FileManager.default.fileExists(atPath: url(for: name).path)
     }
 
+    /// The saved name that `name` would collide with, ignoring case
+    /// (macOS disks usually do), or nil if it's free.
+    public func existingName(matching name: String) -> String? {
+        names().first { $0.lowercased() == name.lowercased() }
+    }
+
     /// Saved layout names, sorted case-insensitively.
     public func names() -> [String] {
         plistFiles(in: layoutsDirectory)
@@ -113,7 +122,7 @@ public struct LayoutStore {
 
     public func write(_ layout: Layout, as name: String) throws {
         try Self.validate(name)
-        if let clash = names().first(where: { $0 != name && $0.lowercased() == name.lowercased() }) {
+        if let clash = existingName(matching: name), clash != name {
             throw DockLayoutError.nameTaken(existing: clash)
         }
         try writePlist(layout, to: url(for: name))

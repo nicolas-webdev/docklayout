@@ -5,6 +5,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let layouts = DockLayouts.system()
     private var statusItem: NSStatusItem?
     private let menu = NSMenu()
+    /// Switching restarts the Dock and waits for it, which can take seconds,
+    /// so it runs here instead of freezing the menu bar.
+    private let dockQueue = DispatchQueue(label: "com.nicolaswebdev.docklayout.dock")
+    private var busy = false {
+        didSet { statusItem?.button?.appearsDisabled = busy }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if CommandLine.arguments.contains("--debug-menu") {
@@ -22,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.button?.image = StatusIcon.make()
         item.button?.setAccessibilityLabel("Dock Layout")
         menu.delegate = self
+        // We set isEnabled ourselves; NSMenu would otherwise re-enable every item.
+        menu.autoenablesItems = false
         item.menu = menu
         statusItem = item
     }
@@ -30,29 +38,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
-        if !SystemDock.isRunning {
+        if busy {
+            menu.addItem(disabledItem("Switching the Dock…"))
+            menu.addItem(.separator())
+        } else if !SystemDock.isRunning {
             menu.addItem(menuItem("The Dock isn't running. Restart It", #selector(restartDock)))
             menu.addItem(.separator())
         }
         let names = layouts.names()
-        let active = layouts.activeName()
+        // Mid-switch the Dock is restarting; no check mark beats a wrong one.
+        let active = busy ? nil : layouts.activeName()
 
         if names.isEmpty {
-            let empty = NSMenuItem(title: "No layouts yet", action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            menu.addItem(empty)
+            menu.addItem(disabledItem("No layouts yet"))
         }
         for name in names {
             let item = menuItem(name, #selector(loadLayout(_:)))
             item.representedObject = name
             item.state = name == active ? .on : .off
+            item.isEnabled = !busy
             menu.addItem(item)
         }
 
         menu.addItem(.separator())
-        menu.addItem(menuItem("Save Current Dock…", #selector(saveLayout)))
+        let save = menuItem("Save Current Dock…", #selector(saveLayout))
+        save.isEnabled = !busy
+        menu.addItem(save)
         let undo = menuItem("Undo Last Switch", #selector(undoSwitch))
-        undo.isEnabled = !layouts.store.backups().isEmpty
+        undo.isEnabled = !busy && !layouts.store.backups().isEmpty
         menu.addItem(undo)
         if !names.isEmpty {
             let delete = NSMenuItem(title: "Delete Layout", action: nil, keyEquivalent: "")
@@ -85,31 +98,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    private func disabledItem(_ title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.isEnabled = false
+        return item
+    }
+
     // MARK: Actions
 
     @objc private func loadLayout(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
-        attempt("Couldn't switch to \(name)") { try layouts.load(name) }
+        inBackground("Couldn't switch to \(name)") { try $0.load(name) }
     }
 
     @objc private func saveLayout() {
-        guard let name = Dialogs.askName() else { return }
-        if layouts.store.exists(name), !Dialogs.confirm(
-            "Replace \(name)?",
-            body: "This overwrites the saved Dock named \(name).",
-            button: "Replace"
-        ) {
-            return
+        guard !busy, let typed = Dialogs.askName() else { return }
+        // "work" and "Work" are the same file on a normal macOS disk, so offer
+        // to replace the existing layout under its own spelling.
+        var name = typed
+        if let existing = layouts.store.existingName(matching: typed) {
+            guard Dialogs.confirm(
+                "Replace \(existing)?",
+                body: "This overwrites the saved Dock named \(existing).",
+                button: "Replace"
+            ) else { return }
+            name = existing
         }
-        attempt("Couldn't save \(name)") { try layouts.save(name) }
+        inBackground("Couldn't save \(name)") { try $0.save(name) }
     }
 
     @objc private func restartDock() {
-        attempt("Couldn't restart the Dock") { try SystemDock.restart() }
+        inBackground("Couldn't restart the Dock") { try $0.restartDock() }
     }
 
     @objc private func undoSwitch() {
-        attempt("Couldn't undo") { try layouts.undo() }
+        inBackground("Couldn't undo") { _ = try $0.undo() }
     }
 
     @objc private func deleteLayout(_ sender: NSMenuItem) {
@@ -145,6 +168,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    /// Runs a Dock change off the main thread, one at a time, and reports
+    /// any error back on the main thread.
+    private func inBackground(_ title: String, _ work: @escaping (DockLayouts) throws -> Void) {
+        guard !busy else { return }
+        busy = true
+        let layouts = self.layouts
+        dockQueue.async {
+            var failure: Error?
+            do {
+                try work(layouts)
+            } catch {
+                failure = error
+            }
+            DispatchQueue.main.async {
+                self.busy = false
+                if let failure {
+                    Dialogs.inform(title, body: failure.localizedDescription)
+                }
+            }
+        }
     }
 
     private func attempt(_ title: String, _ body: () throws -> Void) {

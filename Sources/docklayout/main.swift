@@ -250,7 +250,7 @@ func run(_ args: [String]) throws -> Int32 {
         let restored = try layouts.undo()
         print("Restored Dock from \(restored)")
     case ("restart-dock", 1):
-        try SystemDock.restart()
+        try layouts.restartDock()
         print("The Dock is running.")
     case ("raycast", 1):
         print(try refreshRaycast(layouts.names()).path)

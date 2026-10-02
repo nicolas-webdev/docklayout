@@ -21,6 +21,7 @@ Coming from the `npx` install? Open the new app once. It quits the old one, remo
 
 - Each saved layout is a menu item. Choose one and the Dock switches. The Dock disappears for a moment while it restarts, and the app waits until it's back.
 - If the Dock ever isn't running, the menu shows **Restart It** at the top.
+- The menu and the terminal take turns: a switch started in one waits for a switch running in the other.
 - A check mark sits on the layout that matches the Dock right now.
 - **Save Current Dock…** asks for a name and snapshots whatever is on screen, including folders and spacers.
 - **Undo Last Switch** puts back the Dock you had before the last switch.
